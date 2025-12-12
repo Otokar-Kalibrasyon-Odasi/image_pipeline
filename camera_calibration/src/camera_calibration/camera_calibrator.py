@@ -49,6 +49,8 @@ from camera_calibration.calibrator import CAMERA_MODEL
 from rclpy.qos import qos_profile_system_default
 from rclpy.qos import QoSProfile
 from camera_calibration_msgs.msg import CalibrationFeedback
+from camera_calibration_msgs.srv import SaveFiles
+from camera_calibration_msgs.srv import DoCalibration
 
 
 
@@ -101,6 +103,9 @@ class CalibrationNode(Node):
 
 
         self.calibration_feedback_publisher = self.create_publisher(CalibrationFeedback, 'calibration_feedback', 10)
+
+        self.save_files_service = self.create_service(SaveFiles, "save_files", self.save_files_callback)
+        self.calibration_service = self.create_service(DoCalibration, "do_calibration", self.calibration_callback)
 
         self.set_camera_info_service = self.create_client(sensor_msgs.srv.SetCameraInfo,
                                                           "camera/set_camera_info")
@@ -157,6 +162,33 @@ class CalibrationNode(Node):
         sth.setDaemon(True)
         sth.start()
 
+    def save_files_callback(self, request, response):
+        if self.c is None:
+            response.success = False
+            response.message = "Calibrator not yet initialized."
+            return response
+
+        serial_number = request.serial_number
+        print("**** Saving files to %s ****" % serial_number)
+        self.c.do_save(serial_number)
+        response.success = True
+        response.message = "Files saved to %s" % serial_number
+        return response
+
+    def calibration_callback(self, request, response):
+        if self.c is None:
+            response.success = False
+            response.message = "Calibrator not yet initialized."
+            return response
+
+        print("**** Calibrating ****")
+        self.c.do_calibration()
+        response.success = self.c.calibrated
+        if response.success:
+            response.message = "Calibration successful."
+        else:
+            response.message = "Calibration failed."
+        return response    
 
     def timer_callback(self):
         msg = CalibrationFeedback()

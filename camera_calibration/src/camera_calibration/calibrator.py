@@ -47,6 +47,7 @@ import time
 from distutils.version import LooseVersion
 from enum import Enum
 from semver import VersionInfo
+import os
 
 # Supported camera models
 class CAMERA_MODEL(Enum):
@@ -697,6 +698,18 @@ class Calibrator():
         self.do_tarfile_save(tf) # Must be overridden in subclasses
         tf.close()
         print(("Wrote calibration data to", filename))
+
+def save_to_file(self, serial_number):
+    """
+    Save calibration data to given directory.
+    """
+    directory = '/tmp/calibrationdata'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    filename = os.path.join(directory, '{serial_number}.yaml')
+    with open(filename, 'w') as f:
+        f.write(self.yaml())
+    print(("Wrote calibration data to", filename))
 
 def image_from_archive(archive, name):
     """
