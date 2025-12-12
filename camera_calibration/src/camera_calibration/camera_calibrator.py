@@ -48,6 +48,8 @@ except ImportError:
 from camera_calibration.calibrator import CAMERA_MODEL
 from rclpy.qos import qos_profile_system_default
 from rclpy.qos import QoSProfile
+from camera_calibration_msgs.msg import CalibrationFeedback
+
 
 
 class BufferQueue(Queue):
@@ -97,6 +99,9 @@ class CalibrationNode(Node):
                  max_chessboard_speed = -1, queue_size = 1):
         super().__init__(name)
 
+
+        self.calibration_feedback_publisher = self.create_publisher(CalibrationFeedback, 'calibration_feedback', 10)
+
         self.set_camera_info_service = self.create_client(sensor_msgs.srv.SetCameraInfo,
                                                           "camera/set_camera_info")
         self.set_left_camera_info_service = self.create_client(sensor_msgs.srv.SetCameraInfo,
@@ -141,6 +146,9 @@ class CalibrationNode(Node):
 
         self._last_display = None
 
+        timer_period = 1.0
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+
         mth = ConsumerThread(self.q_mono, self.handle_monocular)
         mth.setDaemon(True)
         mth.start()
@@ -148,6 +156,36 @@ class CalibrationNode(Node):
         sth = ConsumerThread(self.q_stereo, self.handle_stereo)
         sth.setDaemon(True)
         sth.start()
+
+
+    def timer_callback(self):
+        msg = CalibrationFeedback()
+
+        # Calibrator henüz oluşturulmamışsa çık
+        if self.c is None:
+            return
+
+        # Boyutlar
+        # msg.width = self.c.size[0]
+        # msg.height = self.c.size[1]
+
+        msg.calibrated = self.c.calibrated
+
+        # Kalibrasyon yapılmamışsa, intrinsics olmayabilir
+        if self.c.calibrated and hasattr(self.c, 'intrinsics'):
+            # K (3x3 intrinsic matrix)
+            msg.k = list(self.c.intrinsics.flatten())  # 9 eleman
+
+            # Distortion coefficients (d)
+            msg.d = list(self.c.distortion.flatten())
+
+            # R (3x3 rectification matrix)
+            msg.r = list(self.c.R.flatten())
+
+            # P (3x4 projection matrix)
+            msg.p = list(self.c.P.flatten())
+
+        self.calibration_feedback_publisher.publish(msg)
 
     def redraw_stereo(self, *args):
         pass
