@@ -170,7 +170,7 @@ class CalibrationNode(Node):
 
         serial_number = request.serial_number
         print("**** Saving files to %s ****" % serial_number)
-        self.c.do_save(serial_number)
+        self.c.save_to_file(serial_number)
         response.success = True
         response.message = "Files saved to %s" % serial_number
         return response
@@ -195,6 +195,7 @@ class CalibrationNode(Node):
 
         # Calibrator henüz oluşturulmamışsa çık
         if self.c is None:
+            self.get_logger().info("Calibrator not yet initialized.")
             return
 
         # Boyutlar
@@ -202,20 +203,8 @@ class CalibrationNode(Node):
         # msg.height = self.c.size[1]
 
         msg.calibrated = self.c.calibrated
+        msg.good_enough = self.c.goodenough 
 
-        # Kalibrasyon yapılmamışsa, intrinsics olmayabilir
-        if self.c.calibrated and hasattr(self.c, 'intrinsics'):
-            # K (3x3 intrinsic matrix)
-            msg.k = list(self.c.intrinsics.flatten())  # 9 eleman
-
-            # Distortion coefficients (d)
-            msg.d = list(self.c.distortion.flatten())
-
-            # R (3x3 rectification matrix)
-            msg.r = list(self.c.R.flatten())
-
-            # P (3x4 projection matrix)
-            msg.p = list(self.c.P.flatten())
 
         self.calibration_feedback_publisher.publish(msg)
 

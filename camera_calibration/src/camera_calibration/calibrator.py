@@ -699,18 +699,6 @@ class Calibrator():
         tf.close()
         print(("Wrote calibration data to", filename))
 
-def save_to_file(self, serial_number):
-    """
-    Save calibration data to given directory.
-    """
-    directory = '/tmp/calibrationdata'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    filename = os.path.join(directory, '{serial_number}.yaml')
-    with open(filename, 'w') as f:
-        f.write(self.yaml())
-    print(("Wrote calibration data to", filename))
-
 def image_from_archive(archive, name):
     """
     Load image PGM file from tar archive.
@@ -1070,6 +1058,18 @@ class MonoCalibrator(Calibrator):
             taradd(name, cv2.imencode(".png", im)[1].tostring())
         taradd('ost.yaml', self.yaml())
         taradd('ost.txt', self.ost())
+
+    def save_to_file(self, serial_number):
+        """
+        Save calibration data to given directory.
+        """
+        directory = '/tmp/calibrationdata'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        filename = os.path.join(directory, f'{serial_number}.yaml')
+        with open(filename, 'w') as f:
+            f.write(self.yaml())
+        print(("Wrote calibration data to", filename))
 
     def do_tarfile_calibration(self, filename):
         archive = tarfile.open(filename, 'r')
