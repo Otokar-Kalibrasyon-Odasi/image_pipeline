@@ -169,10 +169,11 @@ class CalibrationNode(Node):
             return response
 
         serial_number = request.serial_number
+        output_directory = request.output_directory
         print("**** Saving files to %s ****" % serial_number)
-        self.c.save_to_file(serial_number)
+        self.c.save_to_file(serial_number, output_directory)
         response.success = True
-        response.message = "Files saved to %s" % serial_number
+        response.message = f"Files saved to {output_directory}/{serial_number}"
         return response
 
     def calibration_callback(self, request, response):
