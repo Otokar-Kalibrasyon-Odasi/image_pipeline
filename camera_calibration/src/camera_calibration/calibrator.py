@@ -664,6 +664,11 @@ class Calibrator():
 
         dist_model = _get_dist_model(d, cam_model)
 
+        # For YAML output, copy K into the 3x4 projection matrix while
+        # preserving the last column (Tx, Ty, Tz).
+        p_yaml = numpy.array(p, copy=True)
+        p_yaml[:3, :3] = k
+
         assert k.shape == (3, 3)
         assert r.shape == (3, 3)
         assert p.shape == (3, 4)
@@ -687,7 +692,7 @@ class Calibrator():
             "projection_matrix:",
             "  rows: 3",
             "  cols: 4",
-            "  data: " + format_mat(p, 5),
+            "  data: " + format_mat(p_yaml, 5),
             ""
         ])
         return calmessage
