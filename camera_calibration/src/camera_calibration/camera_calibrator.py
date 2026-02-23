@@ -35,6 +35,7 @@ import message_filters
 import numpy
 import os
 import rclpy
+import yaml
 from rclpy.node import Node
 import sensor_msgs.msg
 import sensor_msgs.srv
@@ -162,6 +163,105 @@ class CalibrationNode(Node):
         sth.setDaemon(True)
         sth.start()
 
+    # ------------------------------------------------
+    # P2 camera intrinsic YAML helpers
+    # ------------------------------------------------
+    _P2_CAMERA_IDS = (
+        "cam_1_FCT",
+        "cam_2_RT",
+        "cam_3_BT",
+        "cam_4_LT",
+        "cam_5_FLT",
+        "cam_6_RM",
+        "cam_7_LM",
+        "cam_8_FCR",
+        "cam_9_FCL",
+        "cam_10_FCW",
+    )
+
+    @staticmethod
+    def _p2_default_entry():
+        return {
+            "undistort": True,
+            "cameraMatrix": [0.0] * 9,
+            "distCoeffs": [0.0] * 5,
+        }
+
+    @staticmethod
+    def _yaml_flow_list_dumper():
+        class FlowListDumper(yaml.SafeDumper):
+            pass
+
+        def _represent_list(dumper, data):
+            return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+        FlowListDumper.add_representer(list, _represent_list)
+        return FlowListDumper
+
+    def _load_or_init_p2_file(self, p2_path):
+        data = None
+        if os.path.exists(p2_path):
+            try:
+                with open(p2_path, "r") as f:
+                    data = yaml.safe_load(f)
+            except Exception:
+                data = None
+
+        if not isinstance(data, dict):
+            data = {}
+
+        gmsl = data.get("gmsl")
+        if not isinstance(gmsl, dict):
+            gmsl = {}
+
+        if not gmsl:
+            for cam_id in self._P2_CAMERA_IDS:
+                gmsl[cam_id] = self._p2_default_entry()
+
+        data["gmsl"] = gmsl
+        return data
+
+    def _write_p2_file(self, p2_path, data):
+        dumper = self._yaml_flow_list_dumper()
+        with open(p2_path, "w") as f:
+            yaml.dump(data, f, Dumper=dumper, sort_keys=False, default_flow_style=False, indent=2)
+
+    def _sync_p2_from_calibration(self, serial_number, output_directory):
+        cam_file = os.path.join(output_directory, f"{serial_number}.yaml")
+        if not os.path.exists(cam_file):
+            self.get_logger().warning(f"Camera YAML not found: {cam_file}")
+            return
+
+        try:
+            with open(cam_file, "r") as f:
+                cam_data = yaml.safe_load(f)
+        except Exception as e:
+            self.get_logger().warning(f"Failed to read camera YAML: {e}")
+            return
+
+        try:
+            k = cam_data["camera_matrix"]["data"]
+            d = cam_data["distortion_coefficients"]["data"]
+        except Exception as e:
+            self.get_logger().warning(f"Missing calibration fields in {cam_file}: {e}")
+            return
+
+        p2_path = os.path.join(output_directory, "p2_camera_intrinsic.yaml")
+        p2_data = self._load_or_init_p2_file(p2_path)
+        gmsl = p2_data.get("gmsl", {})
+
+        entry = gmsl.get(serial_number, self._p2_default_entry())
+        entry["undistort"] = True
+        entry["cameraMatrix"] = [float(x) for x in k]
+        entry["distCoeffs"] = [float(x) for x in d]
+        gmsl[serial_number] = entry
+        p2_data["gmsl"] = gmsl
+
+        try:
+            self._write_p2_file(p2_path, p2_data)
+        except Exception as e:
+            self.get_logger().warning(f"Failed to write {p2_path}: {e}")
+
     def save_files_callback(self, request, response):
         if self.c is None:
             response.success = False
@@ -172,6 +272,7 @@ class CalibrationNode(Node):
         output_directory = request.output_directory
         print("**** Saving files to %s ****" % serial_number)
         self.c.save_to_file(serial_number, output_directory)
+        self._sync_p2_from_calibration(serial_number, output_directory)
         response.success = True
         response.message = f"Files saved to {output_directory}/{serial_number}"
         return response
